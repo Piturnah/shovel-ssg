@@ -6,6 +6,7 @@ Static site generation has never been so simple!
 
 ## Features / TODO
 - [x] Inject HTML components into HTML files
+- [x] Respect ignore files
 - [ ] Nesting components
 - [ ] Live server, watching for changes
 - [ ] Markdown
@@ -15,4 +16,3 @@ Static site generation has never been so simple!
 - [ ] Props (?)
 - [ ] Output prettification
 - [ ] RSS generation
-- [ ] Respect ignore files

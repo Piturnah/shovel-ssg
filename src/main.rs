@@ -8,8 +8,8 @@ use std::{
 
 use anyhow::{Context, Result};
 use clap::Parser;
+use ignore::{DirEntry, WalkBuilder};
 use regex::{Captures, Regex};
-use walkdir::{DirEntry, WalkDir};
 
 #[derive(Debug)]
 struct Component {
@@ -41,26 +41,32 @@ struct Files {
 }
 
 impl Files {
-    fn collect(path: &str) -> Result<Self> {
+    fn collect(path: String) -> Result<Self> {
         let mut html = Vec::new();
         let mut components = HashMap::new();
         let mut other = Vec::new();
-        for entry in WalkDir::new(path) {
+        for entry in WalkBuilder::new(&path).build() {
             let entry = entry?;
             let name = match entry.path().file_name() {
-                Some(name) => name.to_str().context("failed to read file path")?,
-                None => continue,
+                Some(name) if !matches!(name.to_str(), Some(".gitignore" | ".git")) => {
+                    name.to_str().context("failed to read file path")?
+                }
+                _ => continue,
             };
             if let Some(stem) = name.strip_suffix(".component.html") {
                 components.insert(stem.to_string(), Component::new(entry.path()));
             } else if let Some(Some("html")) = entry.path().extension().map(|ext| ext.to_str()) {
                 html.push(entry);
-            } else if entry.file_type().is_file() {
+            } else if entry
+                .file_type()
+                .with_context(|| format!("couldn't determine file type of `{:?}`", entry.path()))?
+                .is_file()
+            {
                 other.push(entry);
             }
         }
 
-        let root = path.to_string();
+        let root = path;
         Ok(Self {
             root,
             html,
@@ -107,12 +113,12 @@ struct Clargs {
     #[clap(default_value = ".")]
     input_dir: String,
 
-    #[clap(long, short, default_value = "build", name = "PATH")]
+    #[clap(long, short, default_value = "build", name = "OUTPUT_PATH")]
     output_dir: String,
 }
 
 fn main() -> Result<()> {
     let clargs = Clargs::parse();
-    let files = Files::collect(&clargs.input_dir)?;
+    let files = Files::collect(clargs.input_dir)?;
     files.build(&clargs.output_dir)
 }
