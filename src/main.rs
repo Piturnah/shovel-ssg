@@ -2,13 +2,16 @@ use std::{
     cell::OnceCell,
     collections::HashMap,
     fs::{self, File},
-    io::Write,
+    io::{stderr, Write},
     path::{Path, PathBuf},
+    sync::Arc,
 };
 
 use anyhow::{Context, Result};
 use clap::Parser;
 use ignore::{DirEntry, WalkBuilder};
+use log::{info, warn};
+use notify::{Event, EventKind, RecursiveMode, Watcher};
 use regex::{Captures, Regex};
 
 #[derive(Debug)]
@@ -41,11 +44,11 @@ struct Files {
 }
 
 impl Files {
-    fn collect(path: String) -> Result<Self> {
+    fn collect(path: &Path) -> Result<Self> {
         let mut html = Vec::new();
         let mut components = HashMap::new();
         let mut other = Vec::new();
-        for entry in WalkBuilder::new(&path).build() {
+        for entry in WalkBuilder::new(path).build() {
             let entry = entry?;
             let name = match entry.path().file_name() {
                 Some(name) if !matches!(name.to_str(), Some(".gitignore" | ".git")) => {
@@ -66,7 +69,10 @@ impl Files {
             }
         }
 
-        let root = path;
+        let root = path
+            .to_str()
+            .context("failed to convert path to string")?
+            .to_string();
         Ok(Self {
             root,
             html,
@@ -115,10 +121,49 @@ struct Clargs {
 
     #[clap(long, short, default_value = "build", name = "OUTPUT_PATH")]
     output_dir: String,
+
+    /// Watch the input directory for changes and automatically rebuild.
+    #[clap(long, short)]
+    watch: bool,
 }
 
 fn main() -> Result<()> {
-    let clargs = Clargs::parse();
-    let files = Files::collect(clargs.input_dir)?;
-    files.build(&clargs.output_dir)
+    let clargs = Arc::new(Clargs::parse());
+    let input_dir = Path::new(&clargs.input_dir);
+    let files = Files::collect(input_dir)?;
+    files.build(&clargs.output_dir)?;
+
+    if let Err(e) = simple_logger::SimpleLogger::new().init() {
+        eprintln!("WARNING: Was not able to initialise logging: {e:?}");
+    }
+
+    if clargs.watch {
+        let clargs = Arc::clone(&clargs);
+        let mut watcher = notify::recommended_watcher(move |res: Result<Event, _>| {
+            match res {
+                Ok(ev)
+                    if matches!(
+                        ev.kind,
+                        EventKind::Create(_) | EventKind::Modify(_) | EventKind::Remove(_)
+                    ) =>
+                {
+                    info!("{:?} detected change: {:?}", ev.paths, ev.kind);
+                    match Files::collect(Path::new(&clargs.input_dir))
+                        .map(|files| files.build(&clargs.output_dir))
+                    {
+                        Ok(_) => info!("rebuild succeeded"),
+                        Err(e) => warn!("rebuild failed: {e}"),
+                    }
+                }
+                Err(e) => warn!("error: {e:?}"),
+                _ => {}
+            }
+            let _ = stderr().flush();
+        })?;
+
+        watcher.watch(input_dir, RecursiveMode::Recursive)?;
+        std::thread::park();
+    }
+
+    Ok(())
 }
