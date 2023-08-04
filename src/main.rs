@@ -7,6 +7,7 @@ use std::{
 };
 
 use anyhow::{Context, Result};
+use clap::Parser;
 use regex::{Captures, Regex};
 use walkdir::{DirEntry, WalkDir};
 
@@ -101,7 +102,17 @@ impl Files {
     }
 }
 
+#[derive(Parser)]
+struct Clargs {
+    #[clap(default_value = ".")]
+    input_dir: String,
+
+    #[clap(long, short, default_value = "build", name = "PATH")]
+    output_dir: String,
+}
+
 fn main() -> Result<()> {
-    let files = Files::collect(".")?;
-    files.build("build")
+    let clargs = Clargs::parse();
+    let files = Files::collect(&clargs.input_dir)?;
+    files.build(&clargs.output_dir)
 }
