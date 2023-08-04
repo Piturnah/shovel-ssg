@@ -16,3 +16,4 @@ Static site generation has never been so simple!
 - [ ] Props (?)
 - [ ] Output prettification
 - [ ] RSS generation
+- [ ] Configuration file
