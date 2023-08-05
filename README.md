@@ -18,3 +18,4 @@ Static site generation has never been so simple!
 - [ ] Output prettification
 - [ ] RSS generation
 - [ ] Configuration file
+- [ ] GitHub action
