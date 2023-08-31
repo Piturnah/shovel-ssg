@@ -8,9 +8,9 @@ Static site generation has never been so simple!
 - [x] Inject HTML components into HTML files
 - [x] Respect ignore files
 - [x] Watching for changes
+- [x] Markdown
 - [ ] Live server
 - [ ] Nesting components
-- [ ] Markdown
 - [ ] Declarative iteration
 - [ ] Layouts
 - [ ] Attributes for components/pages

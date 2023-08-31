@@ -36,18 +36,30 @@ impl Component {
 }
 
 #[derive(Debug)]
+enum TemplateKind {
+    Html,
+    Markdown,
+    Other,
+}
+
+#[derive(Debug)]
+struct Template {
+    kind: TemplateKind,
+    file: DirEntry,
+}
+
+#[derive(Debug)]
 struct Files {
     root: String,
-    html: Vec<DirEntry>,
+    templates: Vec<Template>,
     components: HashMap<String, Component>,
-    other: Vec<DirEntry>,
 }
 
 impl Files {
+    /// Collects the relevant files in the provided root directory.
     fn collect(path: &Path) -> Result<Self> {
-        let mut html = Vec::new();
+        let mut templates = Vec::new();
         let mut components = HashMap::new();
-        let mut other = Vec::new();
         for entry in WalkBuilder::new(path).build() {
             let entry = entry?;
             let name = match entry.path().file_name() {
@@ -58,14 +70,19 @@ impl Files {
             };
             if let Some(stem) = name.strip_suffix(".component.html") {
                 components.insert(stem.to_string(), Component::new(entry.path()));
-            } else if let Some(Some("html")) = entry.path().extension().map(|ext| ext.to_str()) {
-                html.push(entry);
             } else if entry
                 .file_type()
                 .with_context(|| format!("couldn't determine file type of `{:?}`", entry.path()))?
                 .is_file()
             {
-                other.push(entry);
+                templates.push(Template {
+                    kind: match entry.path().extension().map(|ext| ext.to_str()) {
+                        Some(Some("html")) => TemplateKind::Html,
+                        Some(Some("md")) => TemplateKind::Markdown,
+                        _ => TemplateKind::Other,
+                    },
+                    file: entry,
+                })
             }
         }
 
@@ -75,9 +92,8 @@ impl Files {
             .to_string();
         Ok(Self {
             root,
-            html,
+            templates,
             components,
-            other,
         })
     }
 
@@ -98,19 +114,33 @@ impl Files {
         // simple RE. For example, this may break in the case of inlined JavaScript which uses some
         // tag in a string.
         let component_slot_re = Regex::new(r"<\s*#([^,\s]+)\s*/>")?;
-        for file in &self.html {
-            let output_path = self.get_output_path(Path::new(path), file.path())?;
-            let mut buf = File::create(output_path).context("failed to open file for writing")?;
-            let content = fs::read_to_string(file.path()).unwrap();
-            let new_content = component_slot_re.replace_all(&content, |captures: &Captures| {
-                self.components.get(&captures[1]).unwrap().get_content()
-            });
-            let _ = buf.write(new_content.as_bytes())?;
-        }
-        for file in &self.other {
-            let output_path = self.get_output_path(Path::new(path), file.path())?;
-            fs::copy(file.path(), output_path)
-                .with_context(|| format!("failed to copy file `{:?}`", file.path()))?;
+        for Template { file, kind } in &self.templates {
+            match kind {
+                TemplateKind::Html => {
+                    let output_path = self.get_output_path(Path::new(path), file.path())?;
+                    let mut buf =
+                        File::create(output_path).context("failed to open file for writing")?;
+                    let content = fs::read_to_string(file.path()).unwrap();
+                    let new_content =
+                        component_slot_re.replace_all(&content, |captures: &Captures| {
+                            self.components.get(&captures[1]).unwrap().get_content()
+                        });
+                    let _ = buf.write(new_content.as_bytes())?;
+                }
+                TemplateKind::Markdown => {
+                    let rendered = markdown::file_to_html(file.path()).expect("invalid markdown");
+                    let mut output_path = self.get_output_path(Path::new(path), file.path())?;
+                    output_path.set_extension("html");
+                    let mut buf =
+                        File::create(output_path).context("failed to open file for writing")?;
+                    buf.write(rendered.as_bytes())?;
+                }
+                TemplateKind::Other => {
+                    let output_path = self.get_output_path(Path::new(path), file.path())?;
+                    fs::copy(file.path(), output_path)
+                        .with_context(|| format!("failed to copy file `{:?}`", file.path()))?;
+                }
+            }
         }
 
         Ok(())
