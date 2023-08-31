@@ -122,7 +122,7 @@ struct Clargs {
     #[clap(default_value = ".")]
     input_dir: String,
 
-    #[clap(long, short, default_value = "build", name = "OUTPUT_PATH")]
+    #[clap(long, short, default_value = "_build", name = "OUTPUT_PATH")]
     output_dir: String,
 
     /// Watch the input directory for changes and automatically rebuild.
