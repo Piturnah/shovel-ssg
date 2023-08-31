@@ -94,6 +94,9 @@ impl Files {
     }
 
     fn build(&self, path: &str) -> Result<()> {
+        // XXX: In future, we may need to switch to an actual parsing of the HTML rather than a
+        // simple RE. For example, this may break in the case of inlined JavaScript which uses some
+        // tag in a string.
         let component_slot_re = Regex::new(r"<\s*#([^,\s]+)\s*/>")?;
         for file in &self.html {
             let output_path = self.get_output_path(Path::new(path), file.path())?;
