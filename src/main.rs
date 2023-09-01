@@ -177,6 +177,7 @@ fn main() -> Result<()> {
         .add(&format!("!{}", &clargs.output_dir))?
         .add("!.git")?
         .add("!.gitignore")?
+        .add("!.github")?
         .build()?;
     let files = Files::collect(input_dir, overrides.clone())?;
     files.build(&clargs.output_dir)?;
