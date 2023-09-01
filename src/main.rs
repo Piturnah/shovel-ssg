@@ -65,7 +65,11 @@ impl Files {
         let mut components = HashMap::new();
         // TODO: Walk does not need to be built each time we call the function. It will always be
         // the same for a given Files.
-        for entry in WalkBuilder::new(path).overrides(ignore_overrides).build() {
+        for entry in WalkBuilder::new(path)
+            .hidden(false)
+            .overrides(ignore_overrides)
+            .build()
+        {
             let entry = entry?;
             let Some(Some(name)) = entry.path().file_name().map(|name| name.to_str()) else {
                 continue;
@@ -163,17 +167,19 @@ struct Clargs {
 }
 
 fn main() -> Result<()> {
+    if let Err(e) = simple_logger::SimpleLogger::new().init() {
+        eprintln!("WARNING: Was not able to initialise logging: {e:?}");
+    }
+
     let clargs = Arc::new(Clargs::parse());
     let input_dir = Path::new(&clargs.input_dir);
     let overrides = OverrideBuilder::new(input_dir)
         .add(&format!("!{}", &clargs.output_dir))?
+        .add("!.git")?
+        .add("!.gitignore")?
         .build()?;
     let files = Files::collect(input_dir, overrides.clone())?;
     files.build(&clargs.output_dir)?;
-
-    if let Err(e) = simple_logger::SimpleLogger::new().init() {
-        eprintln!("WARNING: Was not able to initialise logging: {e:?}");
-    }
 
     if clargs.watch {
         let clargs = Arc::clone(&clargs);
