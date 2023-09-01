@@ -1,6 +1,6 @@
-# Dirt-Simple SSG
+# Shovel SSG
 
-Static site generation has never been so simple!
+Dirt-simple static site generation. Why bring a digger when all you need is a shovel?
 
 **NOTE:** This is unfinished software in the *very* early stages of development. It is not ready to be used for basically any purpose.
 

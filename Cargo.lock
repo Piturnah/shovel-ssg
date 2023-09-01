@@ -187,20 +187,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7684a49fb1af197853ef7b2ee694bc1f5b4179556f1e5710e1760c5db6f5e929"
 
 [[package]]
-name = "dsssg"
-version = "0.0.1"
-dependencies = [
- "anyhow",
- "clap",
- "ignore",
- "log",
- "markdown",
- "notify",
- "regex",
- "simple_logger",
-]
-
-[[package]]
 name = "errno"
 version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -522,6 +508,20 @@ name = "serde"
 version = "1.0.181"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6d3e73c93c3240c0bda063c239298e633114c69a888c3e37ca8bb33f343e9890"
+
+[[package]]
+name = "shovel"
+version = "0.0.1"
+dependencies = [
+ "anyhow",
+ "clap",
+ "ignore",
+ "log",
+ "markdown",
+ "notify",
+ "regex",
+ "simple_logger",
+]
 
 [[package]]
 name = "simple_logger"
