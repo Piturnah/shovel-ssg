@@ -135,7 +135,7 @@ impl Files {
                     output_path.set_extension("html");
                     let mut buf =
                         File::create(output_path).context("failed to open file for writing")?;
-                    buf.write(rendered.as_bytes())?;
+                    buf.write_all(rendered.as_bytes())?;
                 }
                 TemplateKind::Other => {
                     let output_path = self.get_output_path(Path::new(path), file.path())?;
