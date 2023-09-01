@@ -9,7 +9,10 @@ use std::{
 
 use anyhow::{Context, Result};
 use clap::Parser;
-use ignore::{DirEntry, WalkBuilder};
+use ignore::{
+    overrides::{Override, OverrideBuilder},
+    DirEntry, WalkBuilder,
+};
 use log::{info, warn};
 use notify::{Event, EventKind, RecursiveMode, Watcher};
 use regex::{Captures, Regex};
@@ -57,16 +60,15 @@ struct Files {
 
 impl Files {
     /// Collects the relevant files in the provided root directory.
-    fn collect(path: &Path) -> Result<Self> {
+    fn collect(path: &Path, ignore_overrides: Override) -> Result<Self> {
         let mut templates = Vec::new();
         let mut components = HashMap::new();
-        for entry in WalkBuilder::new(path).build() {
+        // TODO: Walk does not need to be built each time we call the function. It will always be
+        // the same for a given Files.
+        for entry in WalkBuilder::new(path).overrides(ignore_overrides).build() {
             let entry = entry?;
-            let name = match entry.path().file_name() {
-                Some(name) if !matches!(name.to_str(), Some(".gitignore" | ".git")) => {
-                    name.to_str().context("failed to read file path")?
-                }
-                _ => continue,
+            let Some(Some(name)) = entry.path().file_name().map(|name| name.to_str()) else {
+                continue;
             };
             if let Some(stem) = name.strip_suffix(".component.html") {
                 components.insert(stem.to_string(), Component::new(entry.path()));
@@ -163,7 +165,10 @@ struct Clargs {
 fn main() -> Result<()> {
     let clargs = Arc::new(Clargs::parse());
     let input_dir = Path::new(&clargs.input_dir);
-    let files = Files::collect(input_dir)?;
+    let overrides = OverrideBuilder::new(input_dir)
+        .add(&format!("!{}", &clargs.output_dir))?
+        .build()?;
+    let files = Files::collect(input_dir, overrides.clone())?;
     files.build(&clargs.output_dir)?;
 
     if let Err(e) = simple_logger::SimpleLogger::new().init() {
@@ -181,7 +186,7 @@ fn main() -> Result<()> {
                     ) =>
                 {
                     info!("{:?} detected change: {:?}", ev.paths, ev.kind);
-                    match Files::collect(Path::new(&clargs.input_dir))
+                    match Files::collect(Path::new(&clargs.input_dir), overrides.clone())
                         .map(|files| files.build(&clargs.output_dir))
                     {
                         Ok(_) => info!("rebuild succeeded"),
