@@ -71,7 +71,7 @@ impl Files {
             .build()
         {
             let entry = entry?;
-            let Some(Some(name)) = entry.path().file_name().map(|name| name.to_str()) else {
+            let Some(name) = entry.path().file_name().and_then(|name| name.to_str()) else {
                 continue;
             };
             if let Some(stem) = name.strip_suffix(".component.html") {
@@ -82,9 +82,9 @@ impl Files {
                 .is_file()
             {
                 templates.push(Template {
-                    kind: match entry.path().extension().map(|ext| ext.to_str()) {
-                        Some(Some("html")) => TemplateKind::Html,
-                        Some(Some("md")) => TemplateKind::Markdown,
+                    kind: match entry.path().extension().and_then(|ext| ext.to_str()) {
+                        Some("html") => TemplateKind::Html,
+                        Some("md") => TemplateKind::Markdown,
                         _ => TemplateKind::Other,
                     },
                     file: entry,
