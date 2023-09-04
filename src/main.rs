@@ -4,7 +4,6 @@ use std::{
     fs::{self, File},
     io::Write,
     path::{Path, PathBuf},
-    sync::Arc,
 };
 
 use anyhow::{Context, Result};
@@ -13,7 +12,7 @@ use ignore::{overrides::OverrideBuilder, DirEntry, WalkBuilder};
 use regex::{Captures, Regex};
 
 #[cfg(feature = "dev")]
-use std::io::stderr;
+use std::{io::stderr, sync::Arc};
 
 #[cfg(feature = "dev")]
 use log::{info, warn};
@@ -181,7 +180,7 @@ struct Clargs {
     serve: bool,
 }
 
-fn run(clargs: Arc<Clargs>) -> Result<()> {
+fn run(clargs: &Clargs) -> Result<()> {
     if let Err(e) = simple_logger::SimpleLogger::new().init() {
         eprintln!("WARNING: Was not able to initialise logging: {e:?}");
     }
@@ -194,7 +193,7 @@ fn run(clargs: Arc<Clargs>) -> Result<()> {
 #[cfg(not(feature = "dev"))]
 fn main() -> Result<()> {
     let clargs = Clargs::parse();
-    run(clargs.into())
+    run(&clargs)
 }
 
 #[cfg(feature = "dev")]
@@ -202,9 +201,9 @@ fn main() -> Result<()> {
 async fn main() -> Result<()> {
     let mut clargs = Clargs::parse();
     clargs.watch |= clargs.serve;
-    let clargs = Arc::new(clargs);
-    run(Arc::clone(&clargs))?;
+    run(&clargs)?;
 
+    let clargs = Arc::new(clargs);
     if clargs.watch {
         let clargs1 = Arc::clone(&clargs);
         let mut watcher = notify::recommended_watcher(move |res: Result<Event, _>| {
