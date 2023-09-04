@@ -14,6 +14,7 @@ Dirt-simple static site generation. Why bring a digger when all you need is a sh
 - [ ] Declarative iteration
 - [ ] Layouts
 - [ ] Attributes for components/pages
+- [ ] Typescript support
 - [ ] Props (?)
 - [ ] Output prettification
 - [ ] RSS generation
