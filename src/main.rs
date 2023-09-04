@@ -2,20 +2,23 @@ use std::{
     cell::OnceCell,
     collections::HashMap,
     fs::{self, File},
-    io::{stderr, Write},
+    io::Write,
     path::{Path, PathBuf},
     sync::Arc,
 };
 
 use anyhow::{Context, Result};
 use clap::Parser;
-use ignore::{
-    overrides::{Override, OverrideBuilder},
-    DirEntry, WalkBuilder,
-};
-use log::{info, warn};
-use notify::{Event, EventKind, RecursiveMode, Watcher};
+use ignore::{overrides::OverrideBuilder, DirEntry, WalkBuilder};
 use regex::{Captures, Regex};
+
+#[cfg(feature = "dev")]
+use std::io::stderr;
+
+#[cfg(feature = "dev")]
+use log::{info, warn};
+#[cfg(feature = "dev")]
+use notify::{Event, EventKind, RecursiveMode, Watcher};
 
 #[derive(Debug)]
 struct Component {
@@ -60,14 +63,20 @@ struct Files {
 
 impl Files {
     /// Collects the relevant files in the provided root directory.
-    fn collect(path: &Path, ignore_overrides: Override) -> Result<Self> {
+    fn collect(path: &Path, output_dir: &str) -> Result<Self> {
         let mut templates = Vec::new();
         let mut components = HashMap::new();
         // TODO: Walk does not need to be built each time we call the function. It will always be
         // the same for a given Files.
+        let overrides = OverrideBuilder::new(path)
+            .add(&format!("!{output_dir}"))?
+            .add("!.git")?
+            .add("!.gitignore")?
+            .add("!.github")?
+            .build()?;
         for entry in WalkBuilder::new(path)
             .hidden(false)
-            .overrides(ignore_overrides)
+            .overrides(overrides)
             .build()
         {
             let entry = entry?;
@@ -162,6 +171,7 @@ struct Clargs {
     output_dir: String,
 
     /// Watch the input directory and rebuild on change.
+    #[cfg(feature = "dev")]
     #[clap(long, short)]
     watch: bool,
 
@@ -177,14 +187,23 @@ fn run(clargs: Arc<Clargs>) -> Result<()> {
     }
 
     let input_dir = Path::new(&clargs.input_dir);
-    let overrides = OverrideBuilder::new(input_dir)
-        .add(&format!("!{}", &clargs.output_dir))?
-        .add("!.git")?
-        .add("!.gitignore")?
-        .add("!.github")?
-        .build()?;
-    let files = Files::collect(input_dir, overrides.clone())?;
-    files.build(&clargs.output_dir)?;
+    let files = Files::collect(input_dir, &clargs.output_dir)?;
+    files.build(&clargs.output_dir)
+}
+
+#[cfg(not(feature = "dev"))]
+fn main() -> Result<()> {
+    let clargs = Clargs::parse();
+    run(clargs.into())
+}
+
+#[cfg(feature = "dev")]
+#[tokio::main]
+async fn main() -> Result<()> {
+    let mut clargs = Clargs::parse();
+    clargs.watch |= clargs.serve;
+    let clargs = Arc::new(clargs);
+    run(Arc::clone(&clargs))?;
 
     if clargs.watch {
         let clargs1 = Arc::clone(&clargs);
@@ -197,7 +216,7 @@ fn run(clargs: Arc<Clargs>) -> Result<()> {
                     ) =>
                 {
                     info!("{:?} detected change: {:?}", ev.paths, ev.kind);
-                    match Files::collect(Path::new(&clargs1.input_dir), overrides.clone())
+                    match Files::collect(Path::new(&clargs1.input_dir), &clargs1.output_dir)
                         .map(|files| files.build(&clargs1.output_dir))
                     {
                         Ok(_) => info!("rebuild succeeded"),
@@ -213,33 +232,10 @@ fn run(clargs: Arc<Clargs>) -> Result<()> {
         watcher.watch(Path::new(&clargs.input_dir), RecursiveMode::Recursive)?;
     }
 
-    Ok(())
-}
-
-#[cfg(not(feature = "dev"))]
-fn main() -> Result<()> {
-    let clargs = Arc::new(Clargs::parse());
-    run(Arc::clone(&clargs))?;
-    if clargs.watch {
-        std::thread::park();
-    }
-    Ok(())
-}
-
-#[cfg(feature = "dev")]
-#[tokio::main]
-async fn main() -> Result<()> {
-    let mut clargs = Clargs::parse();
-    clargs.watch |= clargs.serve;
-    let clargs = Arc::new(clargs);
-    run(Arc::clone(&clargs))?;
-
     if clargs.serve {
         warp::serve(warp::fs::dir(clargs.output_dir.clone()))
             .run(([127, 0, 0, 1], 3030))
             .await;
-
-        std::thread::park();
     } else if clargs.watch {
         std::thread::park();
     }

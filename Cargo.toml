@@ -5,15 +5,15 @@ edition = "2021"
 
 [features]
 default = ["dev"]
-dev = ["dep:tokio", "dep:warp"]
+dev = ["dep:log", "dep:notify", "dep:tokio", "dep:warp"]
 
 [dependencies]
 anyhow = "1.0.72"
 clap = { version = "4.3.19", features = ["derive"] }
 ignore = "0.4.20"
-log = "0.4.19"
+log = { version = "0.4.19", optional = true }
 markdown = "0.3.0"
-notify = "6.0.1"
+notify = { version = "6.0.1", optional = true }
 regex = "1.9.1"
 simple_logger = "4.2.0"
 tokio = { version = "1.32.0", features = ["macros", "rt-multi-thread"], optional = true }
