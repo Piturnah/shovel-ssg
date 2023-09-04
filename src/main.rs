@@ -161,17 +161,21 @@ struct Clargs {
     #[clap(long, short, default_value = "_build", name = "OUTPUT_PATH")]
     output_dir: String,
 
-    /// Watch the input directory for changes and automatically rebuild.
+    /// Watch the input directory and rebuild on change.
     #[clap(long, short)]
     watch: bool,
+
+    /// Serve the compiled site on localhost. Also enables `watch`.
+    #[cfg(feature = "dev")]
+    #[clap(long, short)]
+    serve: bool,
 }
 
-fn main() -> Result<()> {
+fn run(clargs: Arc<Clargs>) -> Result<()> {
     if let Err(e) = simple_logger::SimpleLogger::new().init() {
         eprintln!("WARNING: Was not able to initialise logging: {e:?}");
     }
 
-    let clargs = Arc::new(Clargs::parse());
     let input_dir = Path::new(&clargs.input_dir);
     let overrides = OverrideBuilder::new(input_dir)
         .add(&format!("!{}", &clargs.output_dir))?
@@ -183,7 +187,7 @@ fn main() -> Result<()> {
     files.build(&clargs.output_dir)?;
 
     if clargs.watch {
-        let clargs = Arc::clone(&clargs);
+        let clargs1 = Arc::clone(&clargs);
         let mut watcher = notify::recommended_watcher(move |res: Result<Event, _>| {
             match res {
                 Ok(ev)
@@ -193,8 +197,8 @@ fn main() -> Result<()> {
                     ) =>
                 {
                     info!("{:?} detected change: {:?}", ev.paths, ev.kind);
-                    match Files::collect(Path::new(&clargs.input_dir), overrides.clone())
-                        .map(|files| files.build(&clargs.output_dir))
+                    match Files::collect(Path::new(&clargs1.input_dir), overrides.clone())
+                        .map(|files| files.build(&clargs1.output_dir))
                     {
                         Ok(_) => info!("rebuild succeeded"),
                         Err(e) => warn!("rebuild failed: {e}"),
@@ -206,7 +210,37 @@ fn main() -> Result<()> {
             let _ = stderr().flush();
         })?;
 
-        watcher.watch(input_dir, RecursiveMode::Recursive)?;
+        watcher.watch(Path::new(&clargs.input_dir), RecursiveMode::Recursive)?;
+    }
+
+    Ok(())
+}
+
+#[cfg(not(feature = "dev"))]
+fn main() -> Result<()> {
+    let clargs = Arc::new(Clargs::parse());
+    run(Arc::clone(&clargs))?;
+    if clargs.watch {
+        std::thread::park();
+    }
+    Ok(())
+}
+
+#[cfg(feature = "dev")]
+#[tokio::main]
+async fn main() -> Result<()> {
+    let mut clargs = Clargs::parse();
+    clargs.watch |= clargs.serve;
+    let clargs = Arc::new(clargs);
+    run(Arc::clone(&clargs))?;
+
+    if clargs.serve {
+        warp::serve(warp::fs::dir(clargs.output_dir.clone()))
+            .run(([127, 0, 0, 1], 3030))
+            .await;
+
+        std::thread::park();
+    } else if clargs.watch {
         std::thread::park();
     }
 

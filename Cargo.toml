@@ -3,7 +3,9 @@ name = "shovel"
 version = "0.0.1"
 edition = "2021"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[features]
+default = ["dev"]
+dev = ["dep:tokio", "dep:warp"]
 
 [dependencies]
 anyhow = "1.0.72"
@@ -14,3 +16,5 @@ markdown = "0.3.0"
 notify = "6.0.1"
 regex = "1.9.1"
 simple_logger = "4.2.0"
+tokio = { version = "1.32.0", features = ["macros", "rt-multi-thread"], optional = true }
+warp = { version = "0.3.5", optional = true }
