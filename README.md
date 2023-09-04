@@ -9,7 +9,7 @@ Dirt-simple static site generation. Why bring a digger when all you need is a sh
 - [x] Respect ignore files
 - [x] Watching for changes
 - [x] Markdown
-- [ ] Live server
+- [x] Live server
 - [ ] Nesting components
 - [ ] Declarative iteration
 - [ ] Layouts
