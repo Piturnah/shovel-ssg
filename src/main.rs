@@ -123,7 +123,7 @@ impl Files {
         Ok(output_path)
     }
 
-    fn build(&self, path: &str) -> Result<()> {
+    fn build(&self, path: &str, use_ws: bool) -> Result<()> {
         // XXX: In future, we may need to switch to an actual parsing of the HTML rather than a
         // simple RE. For example, this may break in the case of inlined JavaScript which uses some
         // tag in a string.
@@ -135,14 +135,21 @@ impl Files {
                     let mut buf =
                         File::create(output_path).context("failed to open file for writing")?;
                     let content = fs::read_to_string(file.path()).unwrap();
-                    let new_content =
+                    let mut new_content =
                         component_slot_re.replace_all(&content, |captures: &Captures| {
                             self.components.get(&captures[1]).unwrap().get_content()
                         });
+                    if use_ws {
+                        inject_websocket(new_content.to_mut());
+                    }
                     let _ = buf.write(new_content.as_bytes())?;
                 }
                 TemplateKind::Markdown => {
-                    let rendered = markdown::file_to_html(file.path()).expect("invalid markdown");
+                    let mut rendered =
+                        markdown::file_to_html(file.path()).context("invalid markdown")?;
+                    if use_ws {
+                        inject_websocket(&mut rendered);
+                    }
                     let mut output_path = self.get_output_path(Path::new(path), file.path())?;
                     output_path.set_extension("html");
                     let mut buf =
@@ -159,6 +166,13 @@ impl Files {
 
         Ok(())
     }
+}
+
+/// Inject some websocket code that will allow us to do the automatic refresh for the live server.
+fn inject_websocket(html: &mut String) {
+    let head_close_re = Regex::new(r"</\s*head\s*>").unwrap();
+    let inject_idx = head_close_re.find(html).map_or(0, |mat| mat.start());
+    html.insert_str(inject_idx, include_str!("./inject_ws.html"));
 }
 
 #[derive(Parser)]
@@ -187,7 +201,14 @@ fn run(clargs: &Clargs) -> Result<()> {
 
     let input_dir = Path::new(&clargs.input_dir);
     let files = Files::collect(input_dir, &clargs.output_dir)?;
-    files.build(&clargs.output_dir)
+
+    #[cfg(feature = "dev")]
+    files.build(&clargs.output_dir, clargs.serve)?;
+
+    #[cfg(not(feature = "dev"))]
+    files.build(&clargs.output_dir, false)?;
+
+    Ok(())
 }
 
 #[cfg(not(feature = "dev"))]
@@ -199,12 +220,25 @@ fn main() -> Result<()> {
 #[cfg(feature = "dev")]
 #[tokio::main]
 async fn main() -> Result<()> {
+    use std::{net::Ipv4Addr, sync::mpsc, thread};
+    use websocket::{sync::Server, OwnedMessage};
+
     let mut clargs = Clargs::parse();
     clargs.watch |= clargs.serve;
     run(&clargs)?;
 
-    let clargs = Arc::new(clargs);
+    let (request_tx, request_rx) = mpsc::channel();
+    if clargs.serve {
+        let server = Server::bind((Ipv4Addr::LOCALHOST, 3031)).unwrap();
+        thread::spawn(move || {
+            for request in server.filter_map(|req| req.ok()) {
+                let _ = request_tx.send(request);
+            }
+        });
+    }
+
     if clargs.watch {
+        let clargs = Arc::new(clargs);
         let clargs1 = Arc::clone(&clargs);
         let mut watcher = notify::recommended_watcher(move |res: Result<Event, _>| {
             match res {
@@ -216,9 +250,19 @@ async fn main() -> Result<()> {
                 {
                     info!("{:?} detected change: {:?}", ev.paths, ev.kind);
                     match Files::collect(Path::new(&clargs1.input_dir), &clargs1.output_dir)
-                        .map(|files| files.build(&clargs1.output_dir))
+                        .map(|files| files.build(&clargs1.output_dir, clargs1.serve))
                     {
-                        Ok(_) => info!("rebuild succeeded"),
+                        Ok(_) => {
+                            info!("rebuild succeeded");
+                            if clargs1.serve {
+                                while let Ok(request) = request_rx.try_recv() {
+                                    let message = OwnedMessage::Text("reload".to_string());
+                                    let _ = request
+                                        .accept()
+                                        .map(|mut c| c.send_message(&message).unwrap());
+                                }
+                            }
+                        }
                         Err(e) => warn!("rebuild failed: {e}"),
                     }
                 }
@@ -229,13 +273,11 @@ async fn main() -> Result<()> {
         })?;
 
         watcher.watch(Path::new(&clargs.input_dir), RecursiveMode::Recursive)?;
-    }
-
-    if clargs.serve {
-        warp::serve(warp::fs::dir(clargs.output_dir.clone()))
-            .run(([127, 0, 0, 1], 3030))
-            .await;
-    } else if clargs.watch {
+        if clargs.serve {
+            warp::serve(warp::fs::dir(clargs.output_dir.clone()))
+                .run(([127, 0, 0, 1], 3030))
+                .await;
+        }
         std::thread::park();
     }
 
