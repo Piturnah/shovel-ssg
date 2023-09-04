@@ -12,12 +12,20 @@ use ignore::{overrides::OverrideBuilder, DirEntry, WalkBuilder};
 use regex::{Captures, Regex};
 
 #[cfg(feature = "dev")]
-use std::{io::stderr, sync::Arc};
+use std::{
+    io::stderr,
+    net::{Ipv4Addr, TcpListener},
+    sync::mpsc,
+    sync::Arc,
+    thread,
+};
 
 #[cfg(feature = "dev")]
 use log::{info, warn};
 #[cfg(feature = "dev")]
 use notify::{Event, EventKind, RecursiveMode, Watcher};
+#[cfg(feature = "dev")]
+use tungstenite::Message;
 
 #[derive(Debug)]
 struct Component {
@@ -220,18 +228,15 @@ fn main() -> Result<()> {
 #[cfg(feature = "dev")]
 #[tokio::main]
 async fn main() -> Result<()> {
-    use std::{net::Ipv4Addr, sync::mpsc, thread};
-    use websocket::{sync::Server, OwnedMessage};
-
     let mut clargs = Clargs::parse();
     clargs.watch |= clargs.serve;
     run(&clargs)?;
 
     let (request_tx, request_rx) = mpsc::channel();
     if clargs.serve {
-        let server = Server::bind((Ipv4Addr::LOCALHOST, 3031)).unwrap();
+        let server = TcpListener::bind((Ipv4Addr::LOCALHOST, 3031)).unwrap();
         thread::spawn(move || {
-            for request in server.filter_map(|req| req.ok()) {
+            for request in server.incoming().filter_map(|req| req.ok()) {
                 let _ = request_tx.send(request);
             }
         });
@@ -256,10 +261,9 @@ async fn main() -> Result<()> {
                             info!("rebuild succeeded");
                             if clargs1.serve {
                                 while let Ok(request) = request_rx.try_recv() {
-                                    let message = OwnedMessage::Text("reload".to_string());
-                                    let _ = request
-                                        .accept()
-                                        .map(|mut c| c.send_message(&message).unwrap());
+                                    let message = Message::Text("reload".to_string());
+                                    let _ = tungstenite::accept(request)
+                                        .map(|mut socket| socket.send(message));
                                 }
                             }
                         }
