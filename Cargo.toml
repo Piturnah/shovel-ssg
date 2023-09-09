@@ -11,7 +11,7 @@ dev = ["dep:log", "dep:notify", "dep:tokio", "dep:tungstenite", "dep:warp"]
 anyhow = "1.0.75"
 clap = { version = "4.4.2", features = ["derive"] }
 ignore = "0.4.20"
-log = { version = "0.4.19", optional = true }
+log = { version = "0.4.20", optional = true }
 markdown = "0.3.0"
 notify = { version = "6.1.1", optional = true }
 regex = "1.9.1"
