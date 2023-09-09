@@ -121,12 +121,20 @@ impl Files {
 
     /// Give the path of an input file and it will create the relevant directory tree in the output
     /// directory, returning a `PathBuf` to where the output file will go.
-    fn get_output_path(&self, build_path: &Path, file_path: &Path) -> Result<PathBuf> {
+    fn get_output_path(&self, build_path: &Path, file_path: &Path, dir: bool) -> Result<PathBuf> {
         let relative_path = file_path.strip_prefix(&self.root)?;
         let mut output_path = PathBuf::new();
         output_path.push(build_path);
         output_path.push(relative_path);
-        let parent = output_path.parent().context("failed to get file parent")?;
+        let parent = if dir {
+            output_path.set_extension("");
+            output_path.clone()
+        } else {
+            output_path
+                .parent()
+                .context("failed to get file parent")?
+                .to_path_buf()
+        };
         fs::create_dir_all(parent).context("failed to create parent directory")?;
         Ok(output_path)
     }
@@ -139,7 +147,7 @@ impl Files {
         for Template { file, kind } in &self.templates {
             match kind {
                 TemplateKind::Html => {
-                    let output_path = self.get_output_path(Path::new(path), file.path())?;
+                    let output_path = self.get_output_path(Path::new(path), file.path(), false)?;
                     let mut buf =
                         File::create(output_path).context("failed to open file for writing")?;
                     let content = fs::read_to_string(file.path()).unwrap();
@@ -158,14 +166,15 @@ impl Files {
                     if use_ws {
                         inject_websocket(&mut rendered);
                     }
-                    let mut output_path = self.get_output_path(Path::new(path), file.path())?;
-                    output_path.set_extension("html");
+                    let mut output_path =
+                        self.get_output_path(Path::new(path), file.path(), true)?;
+                    output_path.push("index.html");
                     let mut buf =
                         File::create(output_path).context("failed to open file for writing")?;
                     buf.write_all(rendered.as_bytes())?;
                 }
                 TemplateKind::Other => {
-                    let output_path = self.get_output_path(Path::new(path), file.path())?;
+                    let output_path = self.get_output_path(Path::new(path), file.path(), false)?;
                     fs::copy(file.path(), output_path)
                         .with_context(|| format!("failed to copy file `{:?}`", file.path()))?;
                 }
