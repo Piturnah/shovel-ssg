@@ -9,7 +9,7 @@ dev = ["dep:log", "dep:notify", "dep:tokio", "dep:tungstenite", "dep:warp"]
 
 [dependencies]
 anyhow = "1.0.75"
-clap = { version = "4.4.8", features = ["derive"] }
+clap = { version = "4.4.18", features = ["derive"] }
 ignore = "0.4.21"
 log = { version = "0.4.20", optional = true }
 markdown = "0.3.0"
