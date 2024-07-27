@@ -2,7 +2,7 @@
 
 Dirt-simple static site generation. Why bring a digger when all you need is a shovel?
 
-**NOTE:** This is unfinished software in the *very* early stages of development. It is not ready to be used for basically any purpose.
+**NOTE:** This is unfinished software in the *very* early stages of development. It is not ready to be used for basically any purpose. That being said, I *am* using it for my [personal website](https://piturnah.xyz/).
 
 ## Features / TODO
 - [x] Inject HTML components into HTML files
