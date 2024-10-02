@@ -19,4 +19,6 @@ Dirt-simple static site generation. Why bring a digger when all you need is a sh
 - [ ] Output prettification
 - [ ] RSS generation
 - [ ] Configuration file
-- [ ] GitHub action
+- [ ] GitHub action*
+
+I am actually [bodging](https://en.wiktionary.org/wiki/bodge) this at the moment if for some morbid reason you want to do this for your own website: [\[link\]](https://github.com/Piturnah/piturnah.github.io/blob/main/.github/workflows/ci.yml)
