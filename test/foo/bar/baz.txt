@@ -1,1 +1,0 @@
-Here is a plain text file. It should just be put directly into the build.
